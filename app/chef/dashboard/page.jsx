@@ -308,7 +308,7 @@ export default function ChefDashboard() {
               <p className="text-stone-500 text-sm mt-2">
                 {chef?.status === 'rejected'
                   ? 'Your profile was not approved. Contact admin@ghar.food for more info.'
-                  : 'You'll receive an email once your profile is approved. Usually within 24 hours.'}
+                  : 'You will receive an email once your profile is approved. Usually within 24 hours.'}
               </p>
             </div>
           )
