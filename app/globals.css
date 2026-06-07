@@ -1,0 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Lato:wght@300;400;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --spice-500: #f26b1e;
+  --cream: #FDF6E3;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--cream); color: #1c0a00; font-family: 'Lato', sans-serif; }
+
+/* Leaflet map fixes */
+.leaflet-container { height: 100%; width: 100%; z-index: 0; }
+.leaflet-popup-content-wrapper { border-radius: 12px !important; box-shadow: 0 8px 32px rgba(0,0,0,0.18) !important; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #fef3c7; }
+::-webkit-scrollbar-thumb { background: #f97316; border-radius: 3px; }
+
+@layer utilities {
+  .font-display { font-family: 'Playfair Display', serif; }
+}
