@@ -7,16 +7,24 @@ async function getData() {
     const supabase = createServerSupabase();
     const today = new Date().toISOString().split('T')[0];
 
-    const { data: chefs } = await supabase
+    // const { data: chefs } = await supabase
+    //   .from('chefs')
+    //   .select('id,name,photo_url,lat,lng,recipe_list,place_of_origin,payment_phone,payment_qr_url')
+    //   .eq('status', 'approved');
+
+    const { data: chefs, error } = await supabase
       .from('chefs')
-      .select('id,name,photo_url,lat,lng,recipe_list,place_of_origin,payment_phone,payment_qr_url')
-      .eq('status', 'approved');
+      .select('*').eq('status', 'approved');
+    
+
+
 
     const { data: menus } = await supabase
       .from('menus')
       .select('*')
-      .eq('date', today)
-      .eq('is_available', true);
+      .eq('is_available', true)
+      .eq('date', today);
+
 
     return { chefs: chefs || [], menus: menus || [] };
   } catch {
@@ -26,6 +34,7 @@ async function getData() {
 
 export default async function HomePage() {
   const { chefs, menus } = await getData();
+
 
   const lunchCount = menus.filter((m) => m.meal_type === 'lunch').length;
   const dinnerCount = menus.filter((m) => m.meal_type === 'dinner').length;

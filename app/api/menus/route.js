@@ -48,8 +48,8 @@ export async function POST(request) {
   // Time gates: lunch 8-10, dinner 12-15  (admin bypass: check env)
   if (meal_type === 'lunch' && !(hour >= 8 && hour < 10))
     return NextResponse.json({ error: 'Lunch menu can only be posted 8:00–10:00 AM IST' }, { status: 403 });
-  if (meal_type === 'dinner' && !(hour >= 12 && hour < 15))
-    return NextResponse.json({ error: 'Dinner menu can only be posted 12:00–3:00 PM IST' }, { status: 403 });
+  if (meal_type === 'dinner' && !(hour >= 12 && hour < 18))
+    return NextResponse.json({ error: 'Dinner menu can only be posted 12:00–6:00 PM IST' }, { status: 403 });
 
   const supabase = createServerSupabase();
 

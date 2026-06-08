@@ -18,7 +18,7 @@ function getISTHour() {
   return parseInt(ist);
 }
 const canPostLunch  = () => { const h = getISTHour(); return h >= 8  && h < 10; };
-const canPostDinner = () => { const h = getISTHour(); return h >= 12 && h < 15; };
+const canPostDinner = () => { const h = getISTHour(); return h >= 12 && h < 18; };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -122,7 +122,7 @@ export default function ChefDashboard() {
     const form = type === 'lunch' ? lunchForm : dinnerForm;
     const setForm = type === 'lunch' ? setLunchForm : setDinnerForm;
     const canPost = type === 'lunch' ? canPostLunch() : canPostDinner();
-    const window  = type === 'lunch' ? '8:00–10:00 AM IST' : '12:00–3:00 PM IST';
+    const window  = type === 'lunch' ? '8:00–10:00 AM IST' : '12:00–6:00 PM IST';
     const emoji   = type === 'lunch' ? '🍱' : '🌙';
 
     return (
