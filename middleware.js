@@ -19,16 +19,35 @@ export async function middleware(request) {
   }
 
   // Protect /admin (but not /admin/login if we add it later)
-  if (pathname === '/admin') {
-    const token = request.cookies.get('ghar_session')?.value;
-    if (!token) return NextResponse.redirect(new URL('/admin?auth=required', request.url));
+  // if (pathname === '/admin') {
+  //   const token = request.cookies.get('ghar_session')?.value;
+  //   if (!token) return NextResponse.redirect(new URL('/admin?auth=required', request.url));
+  //   try {
+  //     const { payload } = await jwtVerify(token, secret);
+  //     if (payload.role !== 'admin') return NextResponse.redirect(new URL('/', request.url));
+  //   } catch {
+  //     // Will be handled client-side since admin login is on same page
+  //   }
+  // }
+
+  // Protect admin dashboard after login // old code has some issue (change in 8th june)
+if (pathname === '/admin') {
+  const token = request.cookies.get('ghar_session')?.value;
+
+  if (token) {
     try {
       const { payload } = await jwtVerify(token, secret);
-      if (payload.role !== 'admin') return NextResponse.redirect(new URL('/', request.url));
+
+      if (payload.role !== 'admin') {
+        return NextResponse.redirect(
+          new URL('/', request.url)
+        );
+      }
     } catch {
-      // Will be handled client-side since admin login is on same page
+      // Invalid token, let page show login form
     }
   }
+}
 
   return NextResponse.next();
 }

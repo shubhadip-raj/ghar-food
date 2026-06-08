@@ -19,10 +19,11 @@ export async function POST(request) {
 
   const adminEmail = settingsMap.admin_email || process.env.ADMIN_EMAIL || 'adam@ghar.food';
   const adminPasswordHash = settingsMap.admin_password_hash;
-  const adminPasswordEnv = process.env.ADMIN_PASSWORD || 'Billion$dream!';
+  // const adminPasswordEnv = process.env.ADMIN_PASSWORD || 'Billion$dream!';
+   const adminPasswordEnv ='Billion$dream!';
 
   if (email !== adminEmail)
-    return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+    return NextResponse.json({ error: 'Invalid credentials Admin Email' }, { status: 401 });
 
   let valid = false;
   if (adminPasswordHash) {
@@ -31,7 +32,14 @@ export async function POST(request) {
     valid = password === adminPasswordEnv;
   }
 
-  if (!valid) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+//   console.log("User Enter Password -- "+password);
+//   console.log("Admin actual Password -- "+adminPasswordEnv)
+
+//  const valid = password === adminPasswordEnv;
+
+  console.log(valid);
+
+  if (!valid) return NextResponse.json({ error: 'Invalid credentials Admin Password' }, { status: 401 });
 
   const token = await createToken({ role: 'admin', email });
   const response = NextResponse.json({ ok: true });
