@@ -16,24 +16,34 @@ async function getData() {
     //   .from('menus')
     //   .select('*')
     //   .eq('date', today)
-    //   .eq('is_available', true);
+    //   .eq('is_available', true); 
 
     const { data: chefs, error } = await supabase
       .from('chefs')
       .select('*').eq('status', 'approved');
 
+    console.log(chefs.length)
 
-
-// change the query scequence
+    // change the query scequence
     const { data: menus, error1 } = await supabase
       .from('menus')
       .select('*').eq('date', today)
       .eq('is_available', true);
 
 
+    // Get all chef IDs that have menus
+    const menuChefIds = menus.map(menu => menu.chef_id);
 
+    // Keep only chefs that have a menu
+    const filteredChefs = chefs.filter(chef =>
+      menuChefIds.includes(chef.id)
+    );
 
-    return { chefs: chefs || [], menus: menus || [] };
+    console.log('All Chefs:', chefs.length);
+    console.log('Menus:', menus.length);
+    console.log('Filtered Chefs:', filteredChefs.length);
+
+    return { chefs: filteredChefs || [], menus: menus || [] };
   } catch {
     return { chefs: [], menus: [] };
   }
