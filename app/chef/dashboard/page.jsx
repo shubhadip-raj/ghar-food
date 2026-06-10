@@ -33,7 +33,7 @@ const STATUS_NEXT_LABEL = {
   payment_received: '🚀 Mark as Shipped / Ready',
 };
 
-  // change menusection -(new MenuSection) 
+// change menusection -(new MenuSection) 
 const MenuSection = ({
   type,
   form,
@@ -411,9 +411,9 @@ export default function ChefDashboard() {
         {tab === 'menu' && (
           chef?.status === 'approved' ? (
             <div className="grid sm:grid-cols-2 gap-4">
-               {/* <MenuSection type="lunch" />
+              {/* <MenuSection type="lunch" />
               <MenuSection type="dinner" /> */}
-              {/* Change MenuSection render */ }
+              {/* Change MenuSection render */}
               <MenuSection
                 type="lunch"
                 form={lunchForm}
@@ -432,6 +432,7 @@ export default function ChefDashboard() {
                 setForm={setDinnerForm}
                 menus={menus}
                 saving={saving}
+                inputCls={inputCls}
                 msg={msg}
                 postMenu={postMenu}
                 toggleMenu={toggleMenu}

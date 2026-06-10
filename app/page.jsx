@@ -21,15 +21,17 @@ async function getData() {
     const { data: chefs, error } = await supabase
       .from('chefs')
       .select('*').eq('status', 'approved');
-    
 
 
 
-    const { data: menus } = await supabase
+// change the query scequence
+    const { data: menus, error1 } = await supabase
       .from('menus')
-      .select('*')
-      .eq('is_available', true)
-      .eq('date', today);
+      .select('*').eq('date', today)
+      .eq('is_available', true);
+
+
+
 
     return { chefs: chefs || [], menus: menus || [] };
   } catch {
