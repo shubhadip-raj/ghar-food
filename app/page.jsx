@@ -18,30 +18,68 @@ async function getData() {
     //   .eq('date', today)
     //   .eq('is_available', true); 
 
-    const { data: chefs, error } = await supabase
-      .from('chefs')
-      .select('*').eq('status', 'approved');
-
-    console.log(chefs.length)
-
-    // change the query scequence
-    const { data: menus, error1 } = await supabase
-      .from('menus')
-      .select('*').eq('date', today)
-      .eq('is_available', true);
+    //     const { data: chefs, error } = await supabase
+    //       .from('chefs')
+    //       .select('*').eq('status', 'approved');
 
 
-    // Get all chef IDs that have menus
-    const menuChefIds = menus.map(menu => menu.chef_id);
+    //     // change the query scequence
+    //     const { data: menus, error1 } = await supabase
+    //       .from('menus')
+    //       .select('*').eq('date', today)
+    //       .eq('is_available', true);
 
-    // Keep only chefs that have a menu
-    const filteredChefs = chefs.filter(chef =>
-      menuChefIds.includes(chef.id)
-    );
+    // // New change: show only chefs who have posted available menus for today (10/06/2026  / 2.40 pm)
+    //     // Get all chef IDs that have menus
+    //     const menuChefIds = menus.map(menu => menu.chef_id);
+
+    //     // Keep only chefs that have a menu
+    //     const filteredChefs = chefs.filter(chef =>
+    //       menuChefIds.includes(chef.id)
+    //     );
+
+    const { data: chefs, error } =
+      await supabase
+        .from('chefs')
+        .select('*')
+        .eq('status', 'approved');
+
+    const { data: menus, error: menuError } =
+      await supabase
+        .from('menus')
+        .select('*')
+        .eq('date', today)
+        .eq('is_available', true);
+
+    if (error) console.error(error);
+    if (menuError) console.error(menuError);
+
+    const menuChefIds = [
+      ...new Set(
+        (menus || []).map(
+          menu => menu.chef_id
+        )
+      )
+    ];
+
+    const filteredChefs =
+      (chefs || []).filter(
+        chef => menuChefIds.includes(chef.id)
+      );
+
+    console.log({
+      chefsCount: chefs?.length,
+      menusCount: menus?.length,
+      filteredCount:
+        filteredChefs.length,
+    });
+
 
     console.log('All Chefs:', chefs.length);
     console.log('Menus:', menus.length);
     console.log('Filtered Chefs:', filteredChefs.length);
+  console.log("Today:", today);
+    console.log("Chef IDs:", menuChefIds);
 
     return { chefs: filteredChefs || [], menus: menus || [] };
   } catch {
