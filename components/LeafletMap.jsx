@@ -7,22 +7,22 @@ import CitySelector from './CitySelector';
 export default function LeafletMap({ chefs, menus }) {
   const mapRef         = useRef(null);
   const mapInstanceRef = useRef(null);
+  const markersRef     = useRef([]);
   const [selectedMenu, setSelectedMenu] = useState(null);
   const [selectedChef, setSelectedChef] = useState(null);
   const [cityReady,    setCityReady]    = useState(false);
-  const cityRef = useRef(null); // store city coords
+  const cityRef = useRef(null);
 
-  // Called when CitySelector resolves a city
   function handleCitySelected(city) {
     cityRef.current = city;
     setCityReady(true);
   }
 
+  // ── Initialise map once city is known ──
   useEffect(() => {
     if (!cityReady) return;
     if (typeof window === 'undefined') return;
     if (mapInstanceRef.current) {
-      // Map already exists — just fly to the new city
       mapInstanceRef.current.flyTo([cityRef.current.lat, cityRef.current.lng], 12, { duration: 1.5 });
       return;
     }
@@ -30,9 +30,17 @@ export default function LeafletMap({ chefs, menus }) {
     import('leaflet').then((L) => {
       if (mapInstanceRef.current) return;
 
+      // Fix broken default icon paths caused by webpack/Next.js bundling
+      delete L.Icon.Default.prototype._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
       const defaultCenter = cityRef.current
         ? [cityRef.current.lat, cityRef.current.lng]
-        : [19.076, 72.877]; // Mumbai fallback
+        : [19.076, 72.877];
 
       const map = L.map(mapRef.current, { center: defaultCenter, zoom: 12 });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -40,20 +48,61 @@ export default function LeafletMap({ chefs, menus }) {
         maxZoom: 19,
       }).addTo(map);
       mapInstanceRef.current = map;
+    });
 
-      // ── Chef icon ──
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, [cityReady]);
+
+  // ── Re-render markers whenever chefs/menus change OR map becomes ready ──
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+
+    import('leaflet').then((L) => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+
+      // Clear old markers
+      markersRef.current.forEach(m => m.remove());
+      markersRef.current = [];
+
+      // Custom home icon using divIcon — works without any image files
       const chefIcon = L.divIcon({
-        html: `<div style="background:#f97316;border:3px solid white;border-radius:50%;
-                width:44px;height:44px;display:flex;align-items:center;justify-content:center;
-                font-size:22px;box-shadow:0 4px 14px rgba(249,115,22,0.5);cursor:pointer;">🏠</div>`,
-        iconSize: [44, 44], iconAnchor: [22, 22], popupAnchor: [0, -26], className: '',
+        html: `<div style="
+          background: #f97316;
+          border: 3px solid white;
+          border-radius: 50%;
+          width: 44px;
+          height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 22px;
+          box-shadow: 0 4px 14px rgba(249,115,22,0.5);
+          cursor: pointer;
+          line-height: 1;
+        ">🏠</div>`,
+        iconSize: [44, 44],
+        iconAnchor: [22, 22],
+        popupAnchor: [0, -26],
+        className: '', // empty to avoid Leaflet's default white box
       });
 
       const bounds = [];
 
       chefs.forEach((chef) => {
-        if (!chef.lat || !chef.lng) return;
-        bounds.push([chef.lat, chef.lng]);
+        const lat = parseFloat(chef.lat);
+        const lng = parseFloat(chef.lng);
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+          console.warn(`[Map] Chef "${chef.name}" missing coords (lat=${chef.lat}, lng=${chef.lng})`);
+          return;
+        }
+        bounds.push([lat, lng]);
+
         const chefMenus = (menus || []).filter(m => m.chef_id === chef.id);
         const lunch  = chefMenus.find(m => m.meal_type === 'lunch');
         const dinner = chefMenus.find(m => m.meal_type === 'dinner');
@@ -84,11 +133,10 @@ export default function LeafletMap({ chefs, menus }) {
             }
           </div>`).join('');
 
-        // FIX 6: Show chef phone in popup
         const popupContent = `
           <div style="font-family:'Lato',sans-serif;width:250px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-              <img src="${chef.photo_url || 'https://placehold.co/52x52/f97316/white?text=🏠'}"
+              <img src="${chef.photo_url || 'https://placehold.co/52x52/f97316/white?text=Chef'}"
                    style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #f97316;flex-shrink:0;">
               <div>
                 <div style="font-weight:700;font-size:15px;color:#1c0a00;">${chef.name}</div>
@@ -103,16 +151,15 @@ export default function LeafletMap({ chefs, menus }) {
             ${menuHtml || `<p style="color:#9ca3af;font-size:13px;text-align:center;padding:8px 0;">No menu posted today 🍳</p>`}
           </div>`;
 
-        const marker = L.marker([chef.lat, chef.lng], { icon: chefIcon }).addTo(map);
+        const marker = L.marker([lat, lng], { icon: chefIcon }).addTo(map);
         marker.bindPopup(popupContent, { maxWidth: 270 });
+        markersRef.current.push(marker);
       });
 
-      // Fit to chef bounds if we have chefs in this city
       if (bounds.length > 0) {
         map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
       }
 
-      // Global click handler for "Order Now" buttons inside Leaflet popups
       window.__orderMenu = (menuId, chefId) => {
         const menu = (menus || []).find(m => m.id === menuId);
         const chef = chefs.find(c => c.id === chefId);
@@ -122,14 +169,8 @@ export default function LeafletMap({ chefs, menus }) {
         }
       };
     });
-
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [cityReady]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cityReady, chefs, menus]);
 
   // Listen for order events from map popups
   useEffect(() => {
@@ -140,16 +181,9 @@ export default function LeafletMap({ chefs, menus }) {
 
   return (
     <>
-      {/* City selector overlay — shown until city is chosen */}
       <CitySelector onCitySelected={handleCitySelected} />
-
-      {/* Map canvas */}
       <div ref={mapRef} className="w-full h-full" />
-
-      {/* FIX 7: Activity ticker (bottom-right of map) */}
       {cityReady && <ActivityTicker />}
-
-      {/* Order modal */}
       {selectedMenu && selectedChef && (
         <OrderModal
           menu={selectedMenu}

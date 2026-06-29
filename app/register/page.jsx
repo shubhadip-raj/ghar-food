@@ -12,15 +12,77 @@ async function uploadViaServer(file, bucket) {
   return data.url;
 }
 
+// Geocode an address string → { lat, lng } using free Nominatim API
+// Tries multiple fallback strategies for long/complex Indian addresses
+async function geocodeAddress(address) {
+  const nominatimFetch = async (query) => {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=in`;
+    const res = await fetch(url, {
+      headers: { 'Accept-Language': 'en', 'User-Agent': 'GharFood/1.0' },
+    });
+    const data = await res.json();
+    return data && data.length > 0
+      ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), matchedQuery: query }
+      : null;
+  };
+
+  // Strategy 1: Try full address as-is
+  console.log('📍 [Geocode] Strategy 1 — full address:', address);
+  let result = await nominatimFetch(address);
+  if (result) { console.log('✅ [Geocode] Strategy 1 succeeded:', result); return result; }
+
+  // Strategy 2: Extract pincode + city (most reliable for India)
+  // e.g. "600095 Chennai" 
+  const pincodeMatch = address.match(/\b(\d{6})\b/);
+  const cityMatch = address.match(/,\s*([^,]+),\s*Tamil Nadu|,\s*([^,]+),\s*Maharashtra|,\s*([^,]+),\s*Karnataka|,\s*([^,]+),\s*Delhi|,\s*([^,]+),\s*([A-Z][a-z]+ Pradesh)/);
+  if (pincodeMatch) {
+    const pinQuery = pincodeMatch[1]; // just the pincode — very accurate in India
+    console.log('📍 [Geocode] Strategy 2 — pincode only:', pinQuery);
+    result = await nominatimFetch(pinQuery);
+    if (result) { console.log('✅ [Geocode] Strategy 2 succeeded:', result); return result; }
+  }
+
+  // Strategy 3: Take last 3 comma-separated parts (neighbourhood, city, state)
+  const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length > 3) {
+    const trimmed = parts.slice(-3).join(', ');
+    console.log('📍 [Geocode] Strategy 3 — last 3 parts:', trimmed);
+    result = await nominatimFetch(trimmed);
+    if (result) { console.log('✅ [Geocode] Strategy 3 succeeded:', result); return result; }
+  }
+
+  // Strategy 4: Take last 2 comma-separated parts (city, state)
+  if (parts.length > 2) {
+    const trimmed = parts.slice(-2).join(', ');
+    console.log('📍 [Geocode] Strategy 4 — last 2 parts (city + state):', trimmed);
+    result = await nominatimFetch(trimmed);
+    if (result) { console.log('✅ [Geocode] Strategy 4 succeeded:', result); return result; }
+  }
+
+  // Strategy 5: Just the last part (city or state)
+  if (parts.length > 0) {
+    const lastPart = parts[parts.length - 1];
+    console.log('📍 [Geocode] Strategy 5 — last part only:', lastPart);
+    result = await nominatimFetch(lastPart);
+    if (result) { console.log('✅ [Geocode] Strategy 5 succeeded:', result); return result; }
+  }
+
+  console.error('❌ [Geocode] All strategies failed for address:', address);
+  return null;
+}
+
 export default function RegisterPage() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
+  const [geocodeStatus, setGeocodeStatus] = useState(''); // 'loading' | 'success' | 'failed' | ''
   const [form, setForm] = useState({
     name: '', email: '', phone: '', password: '', password2: '',
     address: '', place_of_origin: '', recipe_list: '', bio: '',
     payment_phone: '',
+    lat: null,
+    lng: null,
   });
   const [files, setFiles] = useState({ photo: null, kitchen_photo: null, payment_qr: null });
   const [previews, setPreviews] = useState({});
@@ -33,26 +95,88 @@ export default function RegisterPage() {
     setPreviews((p) => ({ ...p, [field]: URL.createObjectURL(file) }));
   };
 
+  // Called when user leaves the address field
+  const handleAddressBlur = async () => {
+    if (!form.address.trim()) return;
+    setGeocodeStatus('loading');
+    try {
+      const coords = await geocodeAddress(form.address);
+      if (coords) {
+        setForm((p) => ({ ...p, lat: coords.lat, lng: coords.lng }));
+        setGeocodeStatus('success');
+        console.log('📍 Geocoded address to:', coords);
+      } else {
+        setGeocodeStatus('failed');
+        console.warn('⚠️ Could not geocode address:', form.address);
+      }
+    } catch (err) {
+      setGeocodeStatus('failed');
+      console.error('❌ Geocode error:', err);
+    }
+  };
+
+  // Step 2 → Step 3 requires a valid geocode
+  const handleStep2Continue = async () => {
+    setError('');
+    if (!form.address.trim()) { setError('Please enter your address'); return; }
+
+    // If geocode not done yet (user never blurred), run it now
+    if (!form.lat || !form.lng) {
+      setGeocodeStatus('loading');
+      const coords = await geocodeAddress(form.address);
+      if (coords) {
+        setForm((p) => ({ ...p, lat: coords.lat, lng: coords.lng }));
+        setGeocodeStatus('success');
+      } else {
+        setGeocodeStatus('failed');
+        setError('Could not find your address on the map. Please make sure it includes your city and pincode.');
+        return;
+      }
+    }
+
+    setStep(3);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.password !== form.password2) { setError('Passwords do not match'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters'); return; }
     if (!files.photo) { setError('Please upload a profile photo'); return; }
     if (!files.payment_qr) { setError('Please upload your UPI QR code'); return; }
+    if (!form.lat || !form.lng) { setError('Address could not be geocoded. Please go back and fix your address.'); return; }
+
     setLoading(true);
     setError('');
     try {
       const [photo_url, kitchen_photo_url, payment_qr_url] = await Promise.all([
-        files.photo         ? uploadViaServer(files.photo,         'chef-photos')    : Promise.resolve(''),
+        files.photo ? uploadViaServer(files.photo, 'chef-photos') : Promise.resolve(''),
         files.kitchen_photo ? uploadViaServer(files.kitchen_photo, 'kitchen-photos') : Promise.resolve(''),
-        files.payment_qr    ? uploadViaServer(files.payment_qr,    'payment-qr')     : Promise.resolve(''),
+        files.payment_qr ? uploadViaServer(files.payment_qr, 'payment-qr') : Promise.resolve(''),
       ]);
 
-      const res = await fetch('/api/chefs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, photo_url, kitchen_photo_url, payment_qr_url }),
-      });
+      // const res = await fetch('/api/chefs', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ ...form, photo_url, kitchen_photo_url, payment_qr_url }),
+      // });
+
+
+    const payload = {
+      ...form,
+      lat: Number(form.lat),   // ✅ force number
+      lng: Number(form.lng),   // ✅ force number
+      photo_url,
+      kitchen_photo_url,
+      payment_qr_url,
+    };
+
+    console.log("🚀 FINAL PAYLOAD:", payload); // DEBUG
+
+    const res = await fetch('/api/chefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
       setDone(true);
@@ -139,11 +263,45 @@ export default function RegisterPage() {
               <>
                 <h2 className="font-display text-xl font-semibold text-stone-800">Kitchen & Location</h2>
                 <div>
-                  <label className={labelCls}>Full Address * <span className="font-normal text-stone-400">(used to pin you on the map)</span></label>
-                  <textarea className={inputCls} rows={3}
+                  <label className={labelCls}>
+                    Full Address *{' '}
+                    <span className="font-normal text-stone-400">(used to pin you on the map)</span>
+                  </label>
+                  <textarea
+                    className={inputCls}
+                    rows={3}
                     placeholder="12 Gandhi Road, Bandra West, Mumbai 400050"
-                    value={form.address} onChange={(e) => update('address', e.target.value)} required />
+                    value={form.address}
+                    onChange={(e) => {
+                      update('address', e.target.value);
+                      // Reset geocode if they change address after geocoding
+                      if (form.lat || form.lng) {
+                        setForm((p) => ({ ...p, lat: null, lng: null }));
+                        setGeocodeStatus('');
+                      }
+                    }}
+                    onBlur={handleAddressBlur}
+                    required
+                  />
+
+                  {/* Geocode status indicator */}
+                  {geocodeStatus === 'loading' && (
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                      <span className="animate-spin inline-block">⏳</span> Finding your location on the map…
+                    </p>
+                  )}
+                  {geocodeStatus === 'success' && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✅ Location found! ({form.lat?.toFixed(4)}, {form.lng?.toFixed(4)})
+                    </p>
+                  )}
+                  {geocodeStatus === 'failed' && (
+                    <p className="text-xs text-red-500 mt-1">
+                      ❌ Could not find this address. Try adding your city and pincode.
+                    </p>
+                  )}
                 </div>
+
                 <div>
                   <label className={labelCls}>Place of Origin <span className="font-normal text-stone-400">(optional)</span></label>
                   <input className={inputCls} placeholder="Lucknow, Uttar Pradesh" value={form.place_of_origin}
@@ -168,9 +326,9 @@ export default function RegisterPage() {
               <>
                 <h2 className="font-display text-xl font-semibold text-stone-800">Photos & Payment</h2>
                 {[
-                  { key: 'photo',         label: 'Your Profile Photo *',     hint: 'A clear photo of your face', required: true },
-                  { key: 'kitchen_photo', label: 'Kitchen Photo',             hint: 'Show your cooking space',   required: false },
-                  { key: 'payment_qr',    label: 'UPI / Payment QR Code *',   hint: 'Screenshot of your UPI QR code from PhonePe / GPay / Paytm', required: true },
+                  { key: 'photo', label: 'Your Profile Photo *', hint: 'A clear photo of your face', required: true },
+                  { key: 'kitchen_photo', label: 'Kitchen Photo', hint: 'Show your cooking space', required: false },
+                  { key: 'payment_qr', label: 'UPI / Payment QR Code *', hint: 'Screenshot of your UPI QR code from PhonePe / GPay / Paytm', required: true },
                 ].map(({ key, label, hint }) => (
                   <div key={key}>
                     <label className={labelCls}>{label}</label>
@@ -209,12 +367,19 @@ export default function RegisterPage() {
                   ← Back
                 </button>
               )}
-              {step < 3 ? (
-                <button type="button" onClick={() => { setError(''); setStep(s => s + 1); }}
+              {step === 1 && (
+                <button type="button" onClick={() => { setError(''); setStep(2); }}
                   className="flex-1 bg-spice-500 text-white font-semibold py-3 rounded-xl hover:bg-spice-600 transition">
                   Continue →
                 </button>
-              ) : (
+              )}
+              {step === 2 && (
+                <button type="button" onClick={handleStep2Continue} disabled={geocodeStatus === 'loading'}
+                  className="flex-1 bg-spice-500 disabled:bg-spice-300 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl hover:bg-spice-600 transition">
+                  {geocodeStatus === 'loading' ? '⏳ Finding location…' : 'Continue →'}
+                </button>
+              )}
+              {step === 3 && (
                 <button type="submit" disabled={loading}
                   className="flex-1 bg-spice-500 disabled:bg-spice-300 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl hover:bg-spice-600 transition">
                   {loading ? '⏳ Submitting…' : 'Submit for Approval 🚀'}
