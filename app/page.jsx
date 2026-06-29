@@ -38,18 +38,28 @@ async function getData() {
     //       menuChefIds.includes(chef.id)
     //     );
 
-    const { data: chefs, error } =
-      await supabase
-        .from('chefs')
-        .select('*')
-        .eq('status', 'approved');
+    // const { data: chefs, error } =
+    //   await supabase
+    //     .from('chefs')
+    //     .select('*')
+    //     .eq('status', 'approved');
 
-    const { data: menus, error: menuError } =
-      await supabase
-        .from('menus')
-        .select('*')
-        .eq('date', today)
-        .eq('is_available', true);
+    const { data: chefs, error } = await supabase.from('chefs')
+      .select('id,name,email,phone,address,place_of_origin,recipe_list,photo_url,kitchen_photo_url,payment_qr_url,payment_phone,status,lat,lng,recipe_list,created_at')
+      .order('created_at', { ascending: false }).eq('status', 'approved');
+
+    // const { data: menus, error: menuError } =
+    //   await supabase
+    //     .from('menus')
+    //     .select('*')
+    //     .eq('date', today)
+    //     .eq('is_available', true);
+    
+    const { data: menus, error: menuError } = await supabase
+      .from('menus')
+      .select('id, chef_id, name, description, price, meal_type, photo_url, date, is_available, orders_count, created_at')
+      .eq('date', today)
+      .eq('is_available', true);
 
     if (error) console.error(error);
     if (menuError) console.error(menuError);
@@ -78,7 +88,7 @@ async function getData() {
     console.log('All Chefs:', chefs.length);
     console.log('Menus:', menus.length);
     console.log('Filtered Chefs:', filteredChefs.length);
-  console.log("Today:", today);
+    console.log("Today:", today);
     console.log("Chef IDs:", menuChefIds);
 
     return { chefs: filteredChefs || [], menus: menus || [] };
