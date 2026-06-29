@@ -54,10 +54,10 @@ async function getData() {
     //     .select('*')
     //     .eq('date', today)
     //     .eq('is_available', true);
-    
+
     const { data: menus, error: menuError } = await supabase
       .from('menus')
-      .select('id, chef_id, name, description, price, meal_type, photo_url, date, is_available, orders_count, created_at')
+      .select('id, chef_id, name, description, price, meal_type, photo_url, orders_count')
       .eq('date', today)
       .eq('is_available', true);
 
