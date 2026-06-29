@@ -19,7 +19,7 @@ function getISTHour() {
 }
 // FIX 1: Updated windows
 const canPostLunch = () => { const h = getISTHour(); return h >= 0 && h < 10; };
-const canPostDinner = () => { const h = getISTHour(); return h >= 11 && h < 17; };
+const canPostDinner = () => { const h = getISTHour(); return h >= 8 && h < 18; };
 
 // FIX 5: Order status helpers
 const STATUS_CONFIG = {
@@ -50,7 +50,7 @@ const MenuSection = ({
   const canPost = type === 'lunch' ? canPostLunch() : canPostDinner();
   const window_ = type === 'lunch'
     ? '12:00 midnight – 10:00 AM IST'
-    : '11:00 AM – 5:00 PM IST';
+    : '8:00 AM – 6:00 PM IST';
   const emoji = type === 'lunch' ? '🍱' : '🌙';
 
   return (
@@ -228,7 +228,7 @@ export default function ChefDashboard() {
   //   const setForm = type === 'lunch' ? setLunchForm : setDinnerForm;
   //   const canPost = type === 'lunch' ? canPostLunch() : canPostDinner();
   //   // FIX 1: correct window labels
-  //   const window_ = type === 'lunch' ? '12:00 midnight – 10:00 AM IST' : '11:00 AM – 5:00 PM IST';
+  //   const window_ = type === 'lunch' ? '12:00 midnight – 10:00 AM IST' : '8:00 AM – 6:00 PM IST';
   //   const emoji = type === 'lunch' ? '🍱' : '🌙';
 
   //   return (
