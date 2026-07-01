@@ -59,11 +59,11 @@ export async function POST(request) {
 
   const hour = getISTHour();
 
-  // Lunch window = midnight(0) → 10AM; Dinner window = 10AM → 6PM
+  // Lunch window = midnight(0) → 10AM; Dinner window = 8AM → 6PM
   if (meal_type === 'lunch'  && !(hour >= 0  && hour < 10))
     return NextResponse.json({ error: 'Lunch menu can only be posted from 12:00 midnight to 10:00 AM IST' }, { status: 403 });
-  if (meal_type === 'dinner' && !(hour >= 10 && hour < 18))
-    return NextResponse.json({ error: 'Dinner menu can only be posted from 10:00 AM to 6:00 PM IST' }, { status: 403 });
+  if (meal_type === 'dinner' && !(hour >= 8 && hour < 18))
+    return NextResponse.json({ error: 'Dinner menu can only be posted from 8:00 AM to 6:00 PM IST' }, { status: 403 });
 
   const supabase = createServerSupabase();
   const { data: chef } = await supabase.from('chefs').select('status').eq('id', session.id).single();
