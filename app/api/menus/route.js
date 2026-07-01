@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
 function getISTHour() {
   const s = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   return parseInt(s);
@@ -57,11 +59,11 @@ export async function POST(request) {
 
   const hour = getISTHour();
 
-  // FIX 1: Lunch window = midnight(0) → 10AM; Dinner window = 11AM → 5PM
+  // Lunch window = midnight(0) → 10AM; Dinner window = 10AM → 6PM
   if (meal_type === 'lunch'  && !(hour >= 0  && hour < 10))
     return NextResponse.json({ error: 'Lunch menu can only be posted from 12:00 midnight to 10:00 AM IST' }, { status: 403 });
-  if (meal_type === 'dinner' && !(hour >= 11 && hour < 17))
-    return NextResponse.json({ error: 'Dinner menu can only be posted from 11:00 AM to 5:00 PM IST' }, { status: 403 });
+  if (meal_type === 'dinner' && !(hour >= 10 && hour < 18))
+    return NextResponse.json({ error: 'Dinner menu can only be posted from 10:00 AM to 6:00 PM IST' }, { status: 403 });
 
   const supabase = createServerSupabase();
   const { data: chef } = await supabase.from('chefs').select('status').eq('id', session.id).single();
