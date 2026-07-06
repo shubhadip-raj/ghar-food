@@ -160,7 +160,7 @@ async function getData() {
     const [{ data: chefs, error }, { data: menus, error: menuError }] = await Promise.all([
       supabase
         .from('chefs')
-        .select('id,name,email,phone,address,place_of_origin,recipe_list,photo_url,kitchen_photo_url,payment_qr_url,payment_phone,status,lat,lng,created_at')
+        .select('id,name,email,phone,address,bio,place_of_origin,recipe_list,photo_url,kitchen_photo_url,payment_qr_url,payment_phone,status,lat,lng,created_at')
         .eq('status', 'approved')
         .order('created_at', { ascending: false }),
       supabase
