@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase';
 
-const ALLOWED_BUCKETS = ['chef-photos', 'kitchen-photos', 'payment-qr', 'menu-photos'];
+const ALLOWED_BUCKETS = ['chef-photos', 'kitchen-photos', 'payment-qr', 'menu-photos', 'chef-gallery'];
 
 export async function POST(request) {
   const formData = await request.formData();

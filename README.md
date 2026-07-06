@@ -40,6 +40,7 @@ In Supabase → **Storage** → create these **4 public buckets**:
 | `kitchen-photos` | Kitchen photos |
 | `payment-qr` | UPI QR codes |
 | `menu-photos` | Daily dish photos |
+| `chef-gallery` | Chef gallery images (multiple photos per chef) |
 
 For **each** bucket:
 - Click the bucket → **Policies** → **New Policy**
@@ -90,9 +91,10 @@ NEXT_PUBLIC_APP_URL             = https://your-app.vercel.app
 1. Register at `/register` (3-step form)
 2. Wait for admin approval email
 3. Log in at `/chef/login`
-4. Post **lunch** menu between **8:00–10:00 AM IST**
-5. Post **dinner** menu between **12:00–3:00 PM IST**
+4. Post **lunch** menu between **12:00 midnight – 10:00 AM IST**
+5. Post **dinner** menu between **10:00 AM – 6:00 PM IST**
 6. Watch orders come in on the dashboard
+7. Add gallery photos anytime from **Profile → 📸 My Gallery**
 
 ### For Visitors
 1. Open the site — see the map with 🏠 pins

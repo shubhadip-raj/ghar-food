@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -17,41 +17,25 @@ function getISTHour() {
   const s = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false });
   return parseInt(s);
 }
-// FIX 1: Updated windows
-const canPostLunch = () => { const h = getISTHour(); return h >= 0 && h < 10; };
-const canPostDinner = () => { const h = getISTHour(); return h >= 8 && h < 18; };
+const canPostLunch  = () => { const h = getISTHour(); return h >= 0  && h < 10; };
+const canPostDinner = () => { const h = getISTHour(); return h >= 10 && h < 18; };
 
-// FIX 5: Order status helpers
 const STATUS_CONFIG = {
-  confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700', next: 'payment_received' },
-  payment_received: { label: 'Payment Received', color: 'bg-green-100 text-green-700', next: 'shipped' },
-  shipped: { label: 'Shipped / Ready', color: 'bg-purple-100 text-purple-700', next: null },
-  cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-500', next: null },
+  confirmed:        { label: 'Confirmed',         color: 'bg-blue-100 text-blue-700',   next: 'payment_received' },
+  payment_received: { label: 'Payment Received',  color: 'bg-green-100 text-green-700', next: 'shipped' },
+  shipped:          { label: 'Shipped / Ready',   color: 'bg-purple-100 text-purple-700', next: null },
+  cancelled:        { label: 'Cancelled',         color: 'bg-red-100 text-red-500',     next: null },
 };
 const STATUS_NEXT_LABEL = {
-  confirmed: '✅ Mark Payment Received',
+  confirmed:        '✅ Mark Payment Received',
   payment_received: '🚀 Mark as Shipped / Ready',
 };
 
-// change menusection -(new MenuSection) 
-const MenuSection = ({
-  type,
-  form,
-  setForm,
-  menus,
-  saving,
-  inputCls,
-  msg,
-  postMenu,
-  toggleMenu
-}) => {
-
-  const menu = menus[type];
-  const canPost = type === 'lunch' ? canPostLunch() : canPostDinner();
-  const window_ = type === 'lunch'
-    ? '12:00 midnight – 10:00 AM IST'
-    : '8:00 AM – 6:00 PM IST';
-  const emoji = type === 'lunch' ? '🍱' : '🌙';
+const MenuSection = ({ type, form, setForm, menus, saving, inputCls, msg, postMenu, toggleMenu }) => {
+  const menu     = menus[type];
+  const canPost  = type === 'lunch' ? canPostLunch() : canPostDinner();
+  const window_  = type === 'lunch' ? '12:00 midnight – 10:00 AM IST' : '10:00 AM – 6:00 PM IST';
+  const emoji    = type === 'lunch' ? '🍱' : '🌙';
 
   return (
     <div className="bg-white rounded-2xl border border-amber-100 p-5 space-y-4">
@@ -76,7 +60,8 @@ const MenuSection = ({
             </div>
           </div>
           <button onClick={() => toggleMenu(menu.id, menu.is_available)}
-            className={`w-full text-sm py-2.5 rounded-xl font-semibold transition border ${menu.is_available ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
+            className={`w-full text-sm py-2.5 rounded-xl font-semibold transition border ${menu.is_available
+              ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
               : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100'}`}>
             {menu.is_available ? '✅ Live — Tap to Pause' : '⏸ Paused — Tap to Go Live'}
           </button>
@@ -94,7 +79,9 @@ const MenuSection = ({
             <input type="number" className={inputCls} placeholder="Price ₹ *"
               value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
             <label className={`flex items-center gap-2 ${inputCls} cursor-pointer`}>
-              {form.preview ? <img src={form.preview} className="h-6 w-6 rounded object-cover" alt="preview" /> : <span>📷</span>}
+              {form.preview
+                ? <img src={form.preview} className="h-6 w-6 rounded object-cover" alt="preview" />
+                : <span>📷</span>}
               <span className="text-stone-400 text-xs">{form.preview ? 'Change' : 'Food photo'}</span>
               <input type="file" accept="image/*" className="hidden" onChange={e => {
                 const f = e.target.files[0];
@@ -116,17 +103,136 @@ const MenuSection = ({
   );
 };
 
+// ── Gallery Section Component ──
+function GallerySection({ uploadViaServer }) {
+  const [images,      setImages]      = useState([]);
+  const [uploading,   setUploading]   = useState(false);
+  const [deletingId,  setDeletingId]  = useState(null);
+  const [galleryMsg,  setGalleryMsg]  = useState('');
+  const fileInputRef = useRef(null);
+
+  const fetchGallery = useCallback(async () => {
+    const res  = await fetch('/api/chefs/gallery');
+    const data = await res.json();
+    if (res.ok) setImages(data.images || []);
+  }, []);
+
+  useEffect(() => { fetchGallery(); }, [fetchGallery]);
+
+  async function handleAddImages(e) {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setUploading(true);
+    setGalleryMsg('');
+    try {
+      for (const file of files) {
+        const url = await uploadViaServer(file, 'chef-gallery');
+        const res = await fetch('/api/chefs/gallery', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ photo_url: url }),
+        });
+        if (!res.ok) throw new Error('Failed to save image');
+      }
+      setGalleryMsg(`✅ ${files.length} image${files.length > 1 ? 's' : ''} added!`);
+      fetchGallery();
+    } catch (err) {
+      setGalleryMsg('❌ ' + err.message);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleDelete(id) {
+    setDeletingId(id);
+    try {
+      await fetch('/api/chefs/gallery', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      fetchGallery();
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-base font-semibold text-stone-700">📸 My Gallery</h3>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-2 bg-spice-500 hover:bg-spice-600 disabled:bg-stone-300 text-white text-sm font-semibold px-4 py-2 rounded-xl transition">
+          {uploading ? '⏳ Uploading…' : '+ Add Images'}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleAddImages}
+        />
+      </div>
+
+      {galleryMsg && (
+        <p className="text-sm font-medium text-spice-600 mb-3">{galleryMsg}</p>
+      )}
+
+      {images.length === 0 ? (
+        <div className="border-2 border-dashed border-amber-200 rounded-2xl p-8 text-center">
+          <div className="text-3xl mb-2">🖼️</div>
+          <p className="text-stone-400 text-sm">No gallery images yet.</p>
+          <p className="text-stone-400 text-xs mt-1">Click "Add Images" to upload your kitchen &amp; food photos!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+          {images.map(img => (
+            <div key={img.id} className="relative group aspect-square">
+              <img
+                src={img.photo_url}
+                alt="Gallery"
+                className="w-full h-full object-cover rounded-xl border border-amber-100"
+              />
+              {/* Delete button — shows on hover */}
+              <button
+                onClick={() => handleDelete(img.id)}
+                disabled={deletingId === img.id}
+                className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full w-6 h-6 text-xs font-bold
+                           opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow">
+                {deletingId === img.id ? '…' : '×'}
+              </button>
+            </div>
+          ))}
+          {/* Add more tile */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="aspect-square border-2 border-dashed border-amber-300 rounded-xl flex flex-col items-center justify-center
+                       text-amber-400 hover:border-spice-400 hover:text-spice-500 transition cursor-pointer">
+            <span className="text-2xl">+</span>
+            <span className="text-xs mt-1">Add</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ChefDashboard() {
   const router = useRouter();
-  const [chef, setChef] = useState(null);
-  const [orders, setOrders] = useState([]);
-  const [menus, setMenus] = useState({ lunch: null, dinner: null });
-  const [tab, setTab] = useState('orders');
-  const [loading, setLoading] = useState(true);
-  const [lunchForm, setLunchForm] = useState({ name: '', price: '', description: '', photo: null, preview: '' });
-  const [dinnerForm, setDinnerForm] = useState({ name: '', price: '', description: '', photo: null, preview: '' });
-  const [saving, setSaving] = useState({ lunch: false, dinner: false });
-  const [msg, setMsg] = useState({ lunch: '', dinner: '' });
+  const [chef,         setChef]         = useState(null);
+  const [orders,       setOrders]       = useState([]);
+  const [menus,        setMenus]        = useState({ lunch: null, dinner: null });
+  const [tab,          setTab]          = useState('orders');
+  const [loading,      setLoading]      = useState(true);
+  const [lunchForm,    setLunchForm]    = useState({ name: '', price: '', description: '', photo: null, preview: '' });
+  const [dinnerForm,   setDinnerForm]   = useState({ name: '', price: '', description: '', photo: null, preview: '' });
+  const [saving,       setSaving]       = useState({ lunch: false, dinner: false });
+  const [msg,          setMsg]          = useState({ lunch: '', dinner: '' });
   const [updatingOrder, setUpdatingOrder] = useState(null);
 
   const fetchAll = useCallback(async () => {
@@ -146,7 +252,7 @@ export default function ChefDashboard() {
       const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       const todayMenus = (menusData.menus || []).filter(m => m.date === today);
       setMenus({
-        lunch: todayMenus.find(m => m.meal_type === 'lunch') || null,
+        lunch:  todayMenus.find(m => m.meal_type === 'lunch')  || null,
         dinner: todayMenus.find(m => m.meal_type === 'dinner') || null,
       });
     } finally { setLoading(false); }
@@ -189,7 +295,6 @@ export default function ChefDashboard() {
     fetchAll();
   }
 
-  // FIX 5: Update order status
   async function updateOrderStatus(orderId, newStatus) {
     setUpdatingOrder(orderId);
     try {
@@ -214,85 +319,10 @@ export default function ChefDashboard() {
     </div>
   );
 
-  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  const today       = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
   const todayOrders = orders.filter(o => o.created_at?.slice(0, 10) === today);
-  const totalToday = todayOrders.reduce((s, o) => s + Number(o.amount || 0), 0);
-  const inputCls = "w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-spice-400 bg-white transition";
-
-
-  // change menusection -( inputs are not working properly) 
-  // ── Menu section for lunch or dinner ──
-  // const MenuSection = ({ type }) => {
-  //   const menu = menus[type];
-  //   const form = type === 'lunch' ? lunchForm : dinnerForm;
-  //   const setForm = type === 'lunch' ? setLunchForm : setDinnerForm;
-  //   const canPost = type === 'lunch' ? canPostLunch() : canPostDinner();
-  //   // FIX 1: correct window labels
-  //   const window_ = type === 'lunch' ? '12:00 midnight – 10:00 AM IST' : '8:00 AM – 6:00 PM IST';
-  //   const emoji = type === 'lunch' ? '🍱' : '🌙';
-
-  //   return (
-  //     <div className="bg-white rounded-2xl border border-amber-100 p-5 space-y-4">
-  //       <div className="flex items-center justify-between flex-wrap gap-2">
-  //         <h3 className="font-display text-lg font-semibold capitalize">{emoji} {type} Menu</h3>
-  //         <span className={`text-xs px-2 py-1 rounded-full font-medium ${canPost ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-500'}`}>
-  //           {canPost ? '🟢 Window open' : `⏰ ${window_}`}
-  //         </span>
-  //       </div>
-
-  //       {menu ? (
-  //         <div className="space-y-3">
-  //           <div className="flex gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
-  //             {menu.photo_url && <img src={menu.photo_url} alt={menu.name} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />}
-  //             <div className="flex-1">
-  //               <p className="font-semibold text-stone-800">{menu.name}</p>
-  //               {menu.description && <p className="text-xs text-stone-400 mt-0.5">{menu.description}</p>}
-  //               <div className="flex items-center gap-3 mt-1">
-  //                 <span className="font-bold text-spice-600">₹{menu.price}</span>
-  //                 <span className="text-xs text-stone-400">{menu.orders_count || 0}/10 orders</span>
-  //               </div>
-  //             </div>
-  //           </div>
-  //           <button onClick={() => toggleMenu(menu.id, menu.is_available)}
-  //             className={`w-full text-sm py-2.5 rounded-xl font-semibold transition border ${menu.is_available ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
-  //                 : 'bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100'}`}>
-  //             {menu.is_available ? '✅ Live — Tap to Pause' : '⏸ Paused — Tap to Go Live'}
-  //           </button>
-  //         </div>
-  //       ) : (
-  //         <div className="space-y-3">
-  //           {!canPost && (
-  //             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700">
-  //               ⏰ Posting window for {type}: <strong>{window_}</strong>
-  //             </div>
-  //           )}
-  //           <input className={inputCls} placeholder={`Today's ${type} dish name *`}
-  //             value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-  //           <div className="grid grid-cols-2 gap-3">
-  //             <input type="number" className={inputCls} placeholder="Price ₹ *"
-  //               value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} />
-  //             <label className={`flex items-center gap-2 ${inputCls} cursor-pointer`}>
-  //               {form.preview ? <img src={form.preview} className="h-6 w-6 rounded object-cover" alt="preview" /> : <span>📷</span>}
-  //               <span className="text-stone-400 text-xs">{form.preview ? 'Change' : 'Food photo'}</span>
-  //               <input type="file" accept="image/*" className="hidden" onChange={e => {
-  //                 const f = e.target.files[0];
-  //                 if (f) setForm(p => ({ ...p, photo: f, preview: URL.createObjectURL(f) }));
-  //               }} />
-  //             </label>
-  //           </div>
-  //           <textarea className={inputCls} rows={2} placeholder="Description (optional)"
-  //             value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
-  //           {msg[type] && <p className="text-sm font-medium text-spice-600">{msg[type]}</p>}
-  //           <button onClick={() => postMenu(type)} disabled={saving[type] || !canPost}
-  //             title={!canPost ? `Window: ${window_}` : undefined}
-  //             className="w-full bg-spice-500 disabled:bg-stone-200 disabled:text-stone-400 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl hover:bg-spice-600 transition">
-  //             {saving[type] ? 'Posting…' : `Post ${type.charAt(0).toUpperCase() + type.slice(1)} Menu`}
-  //           </button>
-  //         </div>
-  //       )}
-  //     </div>
-  //   );
-  // };
+  const totalToday  = todayOrders.reduce((s, o) => s + Number(o.amount || 0), 0);
+  const inputCls    = "w-full border border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-spice-400 bg-white transition";
 
   return (
     <div className="min-h-screen" style={{ background: '#FDF6E3' }}>
@@ -309,7 +339,8 @@ export default function ChefDashboard() {
                 ? <img src={chef.photo_url} alt={chef.name} className="w-8 h-8 rounded-full object-cover border-2 border-spice-300" />
                 : <div className="w-8 h-8 rounded-full bg-spice-100 flex items-center justify-center">🧑‍🍳</div>}
               <span className="text-sm font-semibold text-stone-700 hidden sm:block">{chef.name}</span>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${chef.status === 'approved' ? 'bg-green-100 text-green-700' :
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                chef.status === 'approved' ? 'bg-green-100 text-green-700' :
                 chef.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>
                 {chef.status === 'approved' ? '✅ Live' : chef.status === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
               </span>
@@ -323,9 +354,9 @@ export default function ChefDashboard() {
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           {[
-            { icon: '📦', label: "Today's Orders", val: todayOrders.length, color: 'text-spice-600' },
-            { icon: '💰', label: 'Revenue Today', val: `₹${totalToday}`, color: 'text-green-600' },
-            { icon: '🍽️', label: 'Total Orders', val: orders.length, color: 'text-stone-700' },
+            { icon: '📦', label: "Today's Orders", val: todayOrders.length,  color: 'text-spice-600' },
+            { icon: '💰', label: 'Revenue Today',  val: `₹${totalToday}`,    color: 'text-green-600' },
+            { icon: '🍽️', label: 'Total Orders',   val: orders.length,       color: 'text-stone-700' },
           ].map(s => (
             <div key={s.label} className="bg-white rounded-2xl border border-amber-100 p-4 text-center shadow-sm">
               <div className="text-2xl mb-1">{s.icon}</div>
@@ -339,8 +370,10 @@ export default function ChefDashboard() {
         <div className="flex gap-2 mb-5 flex-wrap">
           {[['orders', '📦 Orders'], ['menu', "🍴 Today's Menu"], ['profile', '👤 Profile']].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${tab === k ? 'bg-spice-500 text-white shadow-sm' : 'bg-white text-stone-600 border border-stone-200 hover:border-spice-300'
-                }`}>{l}</button>
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+                tab === k ? 'bg-spice-500 text-white shadow-sm' : 'bg-white text-stone-600 border border-stone-200 hover:border-spice-300'}`}>
+              {l}
+            </button>
           ))}
         </div>
 
@@ -353,7 +386,7 @@ export default function ChefDashboard() {
                 <p className="text-stone-400">No orders yet today — post your menu and they'll come!</p>
               </div>
             ) : todayOrders.map(order => {
-              const sc = STATUS_CONFIG[order.status] || STATUS_CONFIG.confirmed;
+              const sc         = STATUS_CONFIG[order.status] || STATUS_CONFIG.confirmed;
               const nextStatus = sc.next;
               return (
                 <div key={order.id} className="bg-white rounded-2xl border border-amber-100 p-4 space-y-3">
@@ -361,7 +394,6 @@ export default function ChefDashboard() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <p className="font-semibold text-stone-800">{order.customer_name}</p>
-                        {/* FIX 5: status badge */}
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.color}`}>{sc.label}</span>
                       </div>
                       <p className="text-sm text-stone-500">{order.customer_email}</p>
@@ -373,7 +405,6 @@ export default function ChefDashboard() {
                       <p className="text-xs text-stone-400">{new Date(order.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p>
                     </div>
                   </div>
-                  {/* FIX 5: action buttons */}
                   {nextStatus && (
                     <button
                       onClick={() => updateOrderStatus(order.id, nextStatus)}
@@ -411,32 +442,8 @@ export default function ChefDashboard() {
         {tab === 'menu' && (
           chef?.status === 'approved' ? (
             <div className="grid sm:grid-cols-2 gap-4">
-              {/* <MenuSection type="lunch" />
-              <MenuSection type="dinner" /> */}
-              {/* Change MenuSection render */}
-              <MenuSection
-                type="lunch"
-                form={lunchForm}
-                setForm={setLunchForm}
-                menus={menus}
-                saving={saving}
-                inputCls={inputCls}
-                msg={msg}
-                postMenu={postMenu}
-                toggleMenu={toggleMenu}
-              />
-
-              <MenuSection
-                type="dinner"
-                form={dinnerForm}
-                setForm={setDinnerForm}
-                menus={menus}
-                saving={saving}
-                inputCls={inputCls}
-                msg={msg}
-                postMenu={postMenu}
-                toggleMenu={toggleMenu}
-              />
+              <MenuSection type="lunch"  form={lunchForm}  setForm={setLunchForm}  menus={menus} saving={saving} inputCls={inputCls} msg={msg} postMenu={postMenu} toggleMenu={toggleMenu} />
+              <MenuSection type="dinner" form={dinnerForm} setForm={setDinnerForm} menus={menus} saving={saving} inputCls={inputCls} msg={msg} postMenu={postMenu} toggleMenu={toggleMenu} />
             </div>
           ) : (
             <div className="bg-amber-50 rounded-2xl border border-amber-200 p-10 text-center">
@@ -456,16 +463,24 @@ export default function ChefDashboard() {
         {/* ── PROFILE tab ── */}
         {tab === 'profile' && chef && (
           <div className="bg-white rounded-2xl border border-amber-100 p-6 space-y-5">
+            {/* Profile photos */}
             <div className="flex gap-4">
-              <img src={chef.photo_url || 'https://placehold.co/80x80/f97316/white?text=🧑‍🍳'}
+              <img src={chef.photo_url || 'https://placehold.co/80x80/f97316/white?text=Chef'}
                 alt={chef.name} className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-100" />
               {chef.kitchen_photo_url && (
                 <img src={chef.kitchen_photo_url} alt="Kitchen" className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-100" />
               )}
             </div>
+
+            {/* Info grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              {[['Name', chef.name], ['Email', chef.email], ['Phone', chef.phone],
-              ['UPI Number', chef.payment_phone], ['Origin', chef.place_of_origin || '—'], ['Status', chef.status]
+              {[
+                ['Name',       chef.name],
+                ['Email',      chef.email],
+                ['Phone',      chef.phone],
+                ['UPI Number', chef.payment_phone],
+                ['Origin',     chef.place_of_origin || '—'],
+                ['Status',     chef.status],
               ].map(([k, v]) => (
                 <div key={k} className="p-3 bg-stone-50 rounded-xl">
                   <p className="text-xs text-stone-400 font-semibold uppercase tracking-wide">{k}</p>
@@ -481,12 +496,17 @@ export default function ChefDashboard() {
                 <p className="text-stone-700 mt-0.5">{chef.address}</p>
               </div>
             </div>
+
+            {/* Payment QR */}
             {chef.payment_qr_url && (
               <div>
                 <p className="text-sm font-semibold text-stone-600 mb-2">💳 Payment QR Code</p>
                 <img src={chef.payment_qr_url} alt="QR Code" className="w-36 h-36 object-contain border border-stone-200 rounded-xl p-2 bg-white" />
               </div>
             )}
+
+            {/* ── Gallery ── */}
+            <GallerySection uploadViaServer={uploadViaServer} />
           </div>
         )}
       </div>

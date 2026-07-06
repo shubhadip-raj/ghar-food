@@ -3,13 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import OrderModal from './OrderModal';
 import ActivityTicker from './ActivityTicker';
 import CitySelector from './CitySelector';
+import ChefProfileModal from './ChefProfileModal';
 
 export default function LeafletMap({ chefs, menus }) {
-  const mapRef         = useRef(null);
+  const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const [selectedMenu, setSelectedMenu] = useState(null);
   const [selectedChef, setSelectedChef] = useState(null);
-  const [cityReady,    setCityReady]    = useState(false);
+  const [profileChef, setProfileChef] = useState(null);
+  const [cityReady, setCityReady] = useState(false);
   const cityRef = useRef(null); // store city coords
 
   // Called when CitySelector resolves a city
@@ -55,7 +57,7 @@ export default function LeafletMap({ chefs, menus }) {
         if (!chef.lat || !chef.lng) return;
         bounds.push([chef.lat, chef.lng]);
         const chefMenus = (menus || []).filter(m => m.chef_id === chef.id);
-        const lunch  = chefMenus.find(m => m.meal_type === 'lunch');
+        const lunch = chefMenus.find(m => m.meal_type === 'lunch');
         const dinner = chefMenus.find(m => m.meal_type === 'dinner');
 
         const menuHtml = [lunch, dinner].filter(Boolean).map(m => `
@@ -73,31 +75,41 @@ export default function LeafletMap({ chefs, menus }) {
               </div>
             </div>
             ${(m.orders_count || 0) < 10
-              ? `<button onclick="window.__orderMenu('${m.id}','${chef.id}')"
+            ? `<button onclick="window.__orderMenu('${m.id}','${chef.id}')"
                    style="margin-top:8px;width:100%;background:#f97316;color:white;border:none;
                           padding:8px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">
                    🛒 Order Now
                  </button>`
-              : `<div style="margin-top:8px;text-align:center;color:#ef4444;font-size:12px;font-weight:600;">
+            : `<div style="margin-top:8px;text-align:center;color:#ef4444;font-size:12px;font-weight:600;">
                    Fully Booked
                  </div>`
-            }
+          }
           </div>`).join('');
 
         // FIX 6: Show chef phone in popup
         const popupContent = `
           <div style="font-family:'Lato',sans-serif;width:250px;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-              <img src="${chef.photo_url || 'https://placehold.co/52x52/f97316/white?text=🏠'}"
+              <img src="${chef.photo_url || 'https://placehold.co/52x52/f97316/white?text=Chef'}"
                    style="width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #f97316;flex-shrink:0;">
-              <div>
-                <div style="font-weight:700;font-size:15px;color:#1c0a00;">${chef.name}</div>
+              <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                   <div style="font-weight:700;font-size:15px;color:#1c0a00;">
+                   ${chef.name}
+                    </div>
+                    <button onclick="window.__viewProfile('${chef.id}')"
+                    title="View full profile"
+                    style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;
+                    padding:2px 6px;font-size:12px;cursor:pointer;color:#ea580c;flex-shrink:0;line-height:1.4;">
+                    👤
+                  </button>
+                </div>
                 ${chef.place_of_origin ? `<div style="font-size:11px;color:#6b7280;">📍 From ${chef.place_of_origin}</div>` : ''}
                 <div style="font-size:12px;color:#f97316;font-weight:600;margin-top:2px;">📞 ${chef.phone}</div>
               </div>
             </div>
             ${chef.recipe_list
-              ? `<p style="font-size:12px;color:#6b7280;margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid #fed7aa;">
+            ? `<p style="font-size:12px;color:#6b7280;margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid #fed7aa;">
                    🍽️ ${chef.recipe_list}
                  </p>` : ''}
             ${menuHtml || `<p style="color:#9ca3af;font-size:13px;text-align:center;padding:8px 0;">No menu posted today 🍳</p>`}
@@ -121,6 +133,14 @@ export default function LeafletMap({ chefs, menus }) {
           map.closePopup();
         }
       };
+
+      window.__viewProfile = (chefId) => {
+        const chef = chefs.find(c => c.id === chefId);
+        if (chef) {
+          window.dispatchEvent(new CustomEvent('ghar:profile', { detail: { chef } }));
+          map.closePopup();
+        }
+      };
     });
 
     return () => {
@@ -136,6 +156,13 @@ export default function LeafletMap({ chefs, menus }) {
     const handler = e => { setSelectedMenu(e.detail.menu); setSelectedChef(e.detail.chef); };
     window.addEventListener('ghar:order', handler);
     return () => window.removeEventListener('ghar:order', handler);
+  }, []);
+
+  // Profile event listener
+  useEffect(() => {
+    const handler = e => setProfileChef(e.detail.chef);
+    window.addEventListener('ghar:profile', handler);
+    return () => window.removeEventListener('ghar:profile', handler);
   }, []);
 
   return (
@@ -155,6 +182,14 @@ export default function LeafletMap({ chefs, menus }) {
           menu={selectedMenu}
           chef={selectedChef}
           onClose={() => { setSelectedMenu(null); setSelectedChef(null); }}
+        />
+      )}
+
+      {/* Profile modal */}
+      {profileChef && (
+        <ChefProfileModal
+          chef={profileChef}
+          onClose={() => setProfileChef(null)}
         />
       )}
     </>
