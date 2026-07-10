@@ -13,7 +13,7 @@ export async function GET() {
   if (!await requireAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const supabase = createServerSupabase();
   const { data } = await supabase.from('chefs')
-    .select('id,name,email,phone,address,place_of_origin,recipe_list,photo_url,kitchen_photo_url,payment_qr_url,payment_phone,status,created_at')
+    .select('id,name,email,phone,address,place_of_origin,recipe_list,photo_url,kitchen_photo_url,payment_qr_url,payment_phone,status,fssai_number,fssai_certificate_url,created_at')
     .order('created_at', { ascending: false });
   return NextResponse.json({ chefs: data || [] });
 }

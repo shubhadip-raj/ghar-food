@@ -7,15 +7,11 @@ export const dynamic = 'force-dynamic';
 // Geocode address via Nominatim (free, no key needed)
 // Returns { lat, lng } or null — never silently falls back to Mumbai
 async function geocodeAddress(address) {
-  const strategies = [
-    address, // full address
-  ];
+  const strategies = [address];
 
-  // Pincode-only (very accurate in India)
   const pincodeMatch = address.match(/\b(\d{6})\b/);
   if (pincodeMatch) strategies.push(pincodeMatch[1]);
 
-  // Last 3 parts
   const parts = address.split(',').map(p => p.trim()).filter(Boolean);
   if (parts.length > 3) strategies.push(parts.slice(-3).join(', '));
   if (parts.length > 2) strategies.push(parts.slice(-2).join(', '));
@@ -38,7 +34,7 @@ async function geocodeAddress(address) {
   }
 
   console.warn('[Geocode] All strategies failed for address:', address);
-  return null; // Caller must handle null — no silent Mumbai fallback
+  return null;
 }
 
 // GET - list all approved chefs (for map)
@@ -46,7 +42,7 @@ export async function GET() {
   const supabase = createServerSupabase();
   const { data, error } = await supabase
     .from('chefs')
-    .select('id,name,phone,photo_url,kitchen_photo_url,lat,lng,recipe_list,place_of_origin,payment_phone,payment_qr_url,bio')
+    .select('id,name,phone,photo_url,kitchen_photo_url,lat,lng,recipe_list,place_of_origin,payment_phone,payment_qr_url,bio,fssai_number')
     .eq('status', 'approved');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ chefs: data });
@@ -65,18 +61,14 @@ export async function POST(request) {
 
   const supabase = createServerSupabase();
 
-  // Check email uniqueness
   const { data: existing } = await supabase.from('chefs').select('id').eq('email', email).single();
   if (existing) return NextResponse.json({ error: 'Email already registered' }, { status: 400 });
 
   const password_hash = await bcrypt.hash(password, 10);
 
-  // Use lat/lng from client if provided (client already geocoded)
   let lat = body.lat ? Number(body.lat) : null;
   let lng = body.lng ? Number(body.lng) : null;
 
-  // Validate — if client lat/lng are suspiciously default Mumbai values,
-  // try geocoding again server-side
   const isMumbaiDefault = (
     lat && lng &&
     Math.abs(lat - 19.076) < 0.001 &&
@@ -90,7 +82,6 @@ export async function POST(request) {
       lat = coords.lat;
       lng = coords.lng;
     } else {
-      // Return error instead of silently using Mumbai
       return NextResponse.json(
         { error: 'Could not determine your location from the address. Please include your city and pincode.' },
         { status: 400 }

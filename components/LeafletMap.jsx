@@ -106,6 +106,7 @@ export default function LeafletMap({ chefs, menus }) {
                 </div>
                 ${chef.place_of_origin ? `<div style="font-size:11px;color:#6b7280;">📍 From ${chef.place_of_origin}</div>` : ''}
                 <div style="font-size:12px;color:#f97316;font-weight:600;margin-top:2px;">📞 ${chef.phone}</div>
+                ${chef.fssai_number ? `<div style="margin-top:4px;font-size:11px;color:#15803d;font-weight:600;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:2px 6px;display:inline-block;">🏅 FSSAI: ${chef.fssai_number}</div>` : ""}
               </div>
             </div>
             ${chef.recipe_list
