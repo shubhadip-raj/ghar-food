@@ -18,24 +18,47 @@ function setCookie(name, value, days) {
 const STATUS_CONFIG = {
   confirmed:        { label: 'Confirmed',        color: 'bg-blue-100 text-blue-700',     icon: '✅' },
   payment_received: { label: 'Payment Received', color: 'bg-green-100 text-green-700',   icon: '💰' },
-  shipped:          { label: 'Ready / Shipped',  color: 'bg-purple-100 text-purple-700', icon: '🚀' },
+  shipped:          { label: 'Ready for Pickup', color: 'bg-purple-100 text-purple-700', icon: '🍱' },
   cancelled:        { label: 'Cancelled',        color: 'bg-red-100 text-red-500',       icon: '✗'  },
 };
 
 const mealEmoji = type => type === 'lunch' ? '🍱' : '🌙';
 
+// ── Live Badge ──
+function LiveBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">
+      <span className="w-2 h-2 bg-white rounded-full inline-block animate-pulse"></span>
+      LIVE
+    </span>
+  );
+}
+
 // ── Kitchen Posts for a menu ──
 function KitchenPosts({ chefId, menuId }) {
-  const [posts,   setPosts]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [lightbox, setLightbox] = useState(null);
+  const [posts,      setPosts]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lightbox,   setLightbox]   = useState(null);
 
+  async function loadPosts(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const res  = await fetch(`/api/chefs/${chefId}/posts?menu_id=${menuId}&t=${Date.now()}`, { cache: 'no-store' });
+      const data = await res.json();
+      setPosts(data.posts || []);
+    } catch { setPosts([]); }
+    finally { setLoading(false); setRefreshing(false); }
+  }
+
+  // Fetch on mount
+  useEffect(() => { loadPosts(); }, [chefId, menuId]);
+
+  // Auto-refresh every 30 seconds
   useEffect(() => {
-    fetch(`/api/chefs/${chefId}/posts?menu_id=${menuId}`)
-      .then(r => r.json())
-      .then(d => setPosts(d.posts || []))
-      .catch(() => setPosts([]))
-      .finally(() => setLoading(false));
+    const interval = setInterval(() => loadPosts(true), 30000);
+    return () => clearInterval(interval);
   }, [chefId, menuId]);
 
   if (loading) return (
@@ -45,27 +68,43 @@ function KitchenPosts({ chefId, menuId }) {
   );
 
   if (posts.length === 0) return (
-    <p className="text-xs text-stone-400 mt-2 italic">No kitchen posts for this order yet.</p>
+    <div className="mt-3 flex items-center justify-between">
+      <p className="text-xs text-stone-400 italic">No kitchen posts yet — chef may be cooking! 🍳</p>
+      <button onClick={() => loadPosts(true)} disabled={refreshing}
+        className="text-xs text-spice-600 font-semibold hover:underline flex items-center gap-1">
+        {refreshing ? '⏳' : '🔄'} Refresh
+      </button>
+    </div>
   );
 
   return (
     <>
-      <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide mt-3 mb-2">
-        📸 Live From Kitchen
-      </p>
+      <div className="flex items-center justify-between mt-3 mb-2">
+        <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">From Kitchen</p>
+        <button onClick={() => loadPosts(true)} disabled={refreshing}
+          className="text-xs text-spice-600 font-semibold hover:underline flex items-center gap-1">
+          {refreshing ? '⏳ Refreshing…' : '🔄 Refresh'}
+        </button>
+      </div>
+
       <div className="grid grid-cols-3 gap-2">
         {posts.map(post => (
-          <div key={post.id} className="relative group rounded-xl overflow-hidden cursor-pointer"
+          <div key={post.id}
+            className="relative group rounded-xl overflow-hidden cursor-pointer"
             onClick={() => setLightbox(post)}>
+
             {post.media_type === 'video' ? (
               <video src={post.media_url} className="w-full aspect-square object-cover" />
             ) : (
               <img src={post.media_url} alt={post.caption || ''}
                 className="w-full aspect-square object-cover" />
             )}
+
+            {/* Video play badge */}
             {post.media_type === 'video' && (
-              <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-full">▶</div>
+              <div className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded-full">▶</div>
             )}
+
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition" />
           </div>
         ))}
@@ -78,6 +117,7 @@ function KitchenPosts({ chefId, menuId }) {
           onClick={() => setLightbox(null)}>
           <button onClick={() => setLightbox(null)}
             className="absolute top-4 right-4 text-white text-3xl font-bold hover:text-stone-300">×</button>
+
           {lightbox.media_type === 'video'
             ? <video src={lightbox.media_url} controls autoPlay
                 className="max-w-full max-h-full rounded-2xl shadow-2xl"
@@ -85,6 +125,7 @@ function KitchenPosts({ chefId, menuId }) {
             : <img src={lightbox.media_url} alt={lightbox.caption || ''}
                 className="max-w-full max-h-full rounded-2xl shadow-2xl"
                 onClick={e => e.stopPropagation()} />}
+
           {lightbox.caption && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-4 py-2 rounded-xl max-w-sm text-center">
               {lightbox.caption}
@@ -98,7 +139,7 @@ function KitchenPosts({ chefId, menuId }) {
 
 // ── Main Modal ──
 export default function MyOrdersModal({ onClose }) {
-  const [step,     setStep]     = useState('phone'); // 'phone' | 'orders'
+  const [step,     setStep]     = useState('phone');
   const [phone,    setPhone]    = useState('');
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(false);
@@ -106,7 +147,6 @@ export default function MyOrdersModal({ onClose }) {
   const [expanded, setExpanded] = useState({});
   const inputRef = useRef(null);
 
-  // Read phone from cookie on mount
   useEffect(() => {
     const saved = getCookie(COOKIE_NAME);
     if (saved) {
@@ -118,7 +158,6 @@ export default function MyOrdersModal({ onClose }) {
     }
   }, []);
 
-  // Close on Escape
   useEffect(() => {
     const handler = e => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -130,10 +169,12 @@ export default function MyOrdersModal({ onClose }) {
     try {
       const res  = await fetch(`/api/orders/my?phone=${encodeURIComponent(ph)}`);
       const data = await res.json();
+      console.log('[MyOrders] phone:', ph, '| status:', res.status, '| orders:', data.orders?.length, '| raw:', JSON.stringify(data));
       if (!res.ok) throw new Error(data.error);
       setOrders(data.orders || []);
       setStep('orders');
     } catch (err) {
+      console.error('[MyOrders] error:', err);
       setError('❌ ' + err.message);
     } finally { setLoading(false); }
   }
@@ -184,7 +225,6 @@ export default function MyOrdersModal({ onClose }) {
             </div>
           </div>
 
-          {/* Phone indicator when on orders step */}
           {step === 'orders' && (
             <div className="mt-3 flex items-center justify-between bg-white/70 rounded-xl px-3 py-2 border border-orange-100">
               <span className="text-sm text-stone-600">📞 {phone}</span>
@@ -207,7 +247,6 @@ export default function MyOrdersModal({ onClose }) {
                 <p className="text-stone-600 font-medium">Enter your phone number</p>
                 <p className="text-stone-400 text-sm mt-1">We'll find your orders placed today</p>
               </div>
-
               <div>
                 <input
                   ref={inputRef}
@@ -220,9 +259,7 @@ export default function MyOrdersModal({ onClose }) {
                 />
                 <p className="text-xs text-stone-400 text-center mt-1">We'll remember this for 30 days 🍪</p>
               </div>
-
               {error && <p className="text-sm text-red-500 text-center">{error}</p>}
-
               <button type="submit" disabled={loading || phone.length < 10}
                 className="w-full bg-spice-500 hover:bg-spice-600 disabled:bg-stone-200 disabled:text-stone-400
                            disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl transition text-base">
@@ -254,10 +291,8 @@ export default function MyOrdersModal({ onClose }) {
                     const isEx = expanded[order.id];
                     return (
                       <div key={order.id} className="bg-white rounded-2xl border border-amber-100 overflow-hidden shadow-sm">
-                        {/* Order card */}
                         <div className="p-4">
                           <div className="flex gap-3">
-                            {/* Menu photo */}
                             {order.menus?.photo_url ? (
                               <img src={order.menus.photo_url} alt={order.menus?.name}
                                 className="w-16 h-16 rounded-xl object-cover border border-amber-100 flex-shrink-0" />
@@ -274,9 +309,7 @@ export default function MyOrdersModal({ onClose }) {
                                   <p className="text-xs text-stone-400 capitalize mt-0.5">
                                     {mealEmoji(order.menus?.meal_type)} {order.menus?.meal_type}
                                   </p>
-                                  <p className="text-xs text-stone-500 mt-0.5">
-                                    👨‍🍳 {order.chefs?.name}
-                                  </p>
+                                  <p className="text-xs text-stone-500 mt-0.5">👨‍🍳 {order.chefs?.name}</p>
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <p className="font-bold text-spice-600">₹{order.amount}</p>
@@ -286,7 +319,7 @@ export default function MyOrdersModal({ onClose }) {
                                 </div>
                               </div>
 
-                              {/* Status badge */}
+                              {/* Status + pickup time */}
                               <div className="mt-2 flex items-center gap-2 flex-wrap">
                                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.color}`}>
                                   {sc.icon} {sc.label}
@@ -300,16 +333,19 @@ export default function MyOrdersModal({ onClose }) {
                             </div>
                           </div>
 
-                          {/* Toggle kitchen posts */}
+                          {/* Kitchen posts toggle with LIVE badge */}
                           <button
                             onClick={() => toggleExpand(order.id)}
-                            className="mt-3 w-full flex items-center justify-between bg-amber-50 hover:bg-amber-100 border border-amber-100 rounded-xl px-3 py-2 transition text-sm font-medium text-stone-600">
-                            <span>📸 Live From Kitchen</span>
+                            className="mt-3 w-full flex items-center justify-between bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl px-3 py-2 transition">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-stone-700">From Kitchen</span>
+                              <LiveBadge />
+                            </div>
                             <span className="text-stone-400 text-xs">{isEx ? '▲ Hide' : '▼ Show'}</span>
                           </button>
                         </div>
 
-                        {/* Kitchen posts — expanded */}
+                        {/* Kitchen posts expanded */}
                         {isEx && (
                           <div className="px-4 pb-4 border-t border-amber-50">
                             <KitchenPosts chefId={order.chef_id} menuId={order.menu_id} />
