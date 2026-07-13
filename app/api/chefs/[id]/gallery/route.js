@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 // Public endpoint — anyone can view a chef's gallery
 export async function GET(request, { params }) {
@@ -15,5 +16,14 @@ export async function GET(request, { params }) {
     .order('created_at', { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ images: data || [] });
+
+  return NextResponse.json(
+    { images: data || [] },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    }
+  );
 }
