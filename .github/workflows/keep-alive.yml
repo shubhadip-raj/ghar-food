@@ -11,4 +11,4 @@ jobs:
 
     steps:
       - name: Ping Health API
-        run: curl -f https://ghar-food.vercel.app/api/health
+        run: curl -f https://ghar-food-dusky.vercel.app/api/health

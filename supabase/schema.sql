@@ -27,6 +27,11 @@ create table if not exists public.chefs (
   created_at       timestamptz not null default now()
 );
 
+-- Add Fssai Number and Certificate  (new at 15-07-2026)
+alter table chefs
+  add column if not exists fssai_number text,
+  add column if not exists fssai_certificate_url text;
+
 -- ────────────────────────────────────────────────────────────
 -- 2. MENUS (daily dishes posted by chefs)
 -- ────────────────────────────────────────────────────────────
@@ -44,6 +49,10 @@ create table if not exists public.menus (
   created_at    timestamptz not null default now(),
   unique(chef_id, date, meal_type)
 );
+
+-- Add Pickup Time   (new at 15-07-2026)
+alter table menus
+  add column if not exists pickup_time text;
 
 -- ────────────────────────────────────────────────────────────
 -- 3. ORDERS
@@ -110,6 +119,9 @@ create policy "public read available menus"
 --   kitchen-photos
 --   payment-qr
 --   menu-photos
+--   chef_gallery   (new added)  (new at 15-07-2026)
+--   kitchen_posts  (new added)  (new at 15-07-2026)
+--   chef-fssai     (new added)  (new at 15-07-2026)
 --
 -- Policy for each bucket – allow public read:
 --   CREATE POLICY "public read" ON storage.objects FOR SELECT USING (bucket_id = '<bucket-name>');
@@ -127,3 +139,31 @@ ALTER TABLE public.orders
 ALTER TABLE public.orders
   ADD CONSTRAINT orders_status_check
     CHECK (status IN ('confirmed','payment_received','shipped','cancelled'));
+
+
+-- ────────────────────────────────────────────────────────────
+-- 8. Kitchen Posts  (New Added)   (new at 15-07-2026)
+-- ────────────────────────────────────────────────────────────
+create table kitchen_posts (
+  id uuid default gen_random_uuid() primary key,
+  chef_id uuid references chefs(id) on delete cascade,
+  caption text default '',
+  media_url text not null,
+  media_type text not null,
+  created_at timestamptz default now()
+);
+
+
+alter table kitchen_posts
+  add column if not exists menu_id uuid references menus(id) on delete set null;
+
+-- ────────────────────────────────────────────────────────────
+-- 9. Chef Gallery (New Added)  (new at 15-07-2026)  
+-- ────────────────────────────────────────────────────────────
+
+create table chef_gallery (
+  id uuid default gen_random_uuid() primary key,
+  chef_id uuid references chefs(id) on delete cascade,
+  photo_url text not null,
+  created_at timestamptz default now()
+);
