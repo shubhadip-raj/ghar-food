@@ -3,6 +3,8 @@ import { createServerSupabase } from '@/lib/supabase';
 import { getSession } from '@/lib/auth';
 import { sendOrderConfirmation } from '@/lib/email';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,10 +23,24 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const { menu_id, chef_id, name: customer_name, email: customer_email, phone: customer_phone } = await request.json();
+  const {
+    menu_id, chef_id,
+    name: customer_name,
+    email: customer_email,
+    phone: customer_phone,
+    delivery_address,
+    delivery_lat,
+    delivery_lng,
+  } = await request.json();
 
   if (!menu_id || !chef_id || !customer_name || !customer_email || !customer_phone)
     return NextResponse.json({ error: 'All fields are required' }, { status: 400 });
+
+  if (!delivery_address)
+    return NextResponse.json({ error: 'Delivery address is required' }, { status: 400 });
+
+  if (!delivery_lat || !delivery_lng)
+    return NextResponse.json({ error: 'Please confirm your delivery location on the map' }, { status: 400 });
 
   const supabase = createServerSupabase();
 
@@ -39,10 +55,15 @@ export async function POST(request) {
     .select('name, email, phone, payment_phone, payment_qr_url').eq('id', chef_id).single();
   if (!chef) return NextResponse.json({ error: 'Chef not found' }, { status: 404 });
 
-  // Create order
+  // Create order with delivery details
   const { data: order, error } = await supabase.from('orders').insert({
-    menu_id, chef_id, customer_name, customer_email, customer_phone,
-    amount: menu.price, status: 'confirmed',
+    menu_id, chef_id,
+    customer_name, customer_email, customer_phone,
+    delivery_address,
+    delivery_lat: Number(delivery_lat),
+    delivery_lng: Number(delivery_lng),
+    amount: menu.price,
+    status: 'confirmed',
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

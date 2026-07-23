@@ -141,6 +141,12 @@ ALTER TABLE public.orders
     CHECK (status IN ('confirmed','payment_received','shipped','cancelled'));
 
 
+    alter table orders
+  add column if not exists delivery_address text,
+  add column if not exists delivery_lat numeric,
+  add column if not exists delivery_lng numeric;
+
+
 -- ────────────────────────────────────────────────────────────
 -- 8. Kitchen Posts  (New Added)   (new at 15-07-2026)
 -- ────────────────────────────────────────────────────────────
